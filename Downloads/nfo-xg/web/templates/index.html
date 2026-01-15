@@ -317,9 +317,70 @@
             document.getElementById('tmdbModal').classList.remove('active');
         }
 
-        // 桩函数：完整实现在 Task 4
         async function searchTMDB() {
-            showToast('搜索功能将在 Task 4 实现', 'error');
+            const query = document.getElementById('tmdbSearchInput').value.trim();
+            if (!query) {
+                showToast('请输入搜索关键词', 'error');
+                return;
+            }
+
+            const loading = document.getElementById('tmdbLoading');
+            const errorDiv = document.getElementById('tmdbError');
+            const resultsDiv = document.getElementById('tmdbResults');
+
+            // UI 状态
+            loading.style.display = 'flex';
+            errorDiv.style.display = 'none';
+            resultsDiv.innerHTML = '';
+
+            try {
+                const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.detail || '搜索失败');
+                }
+
+                renderTMDBResults(data.results);
+            } catch (e) {
+                errorDiv.textContent = e.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function renderTMDBResults(results) {
+            const container = document.getElementById('tmdbResults');
+
+            if (results.length === 0) {
+                container.innerHTML = '<div class="tmdb-no-results">未找到匹配结果</div>';
+                return;
+            }
+
+            let html = '<div class="tmdb-results-grid">';
+            for (const item of results) {
+                const posterUrl = item.poster_url
+                    ? item.poster_url
+                    : 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="300" viewBox="0 0 200 300"><rect fill="%232a2a4a" width="200" height="300"/><text fill="%23666" x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="24">🎬</text></svg>';
+                const year = item.year || '未知';
+                const typeLabel = item.media_type === 'movie' ? '电影' : '剧集';
+
+                html += `
+                    <div class="tmdb-result-card" onclick="selectTMDBResult(${item.id}, '${item.media_type}')">
+                        <div class="tmdb-poster">
+                            <img src="${posterUrl}" alt="${esc(item.title)}" loading="lazy">
+                        </div>
+                        <div class="tmdb-info">
+                            <span class="tmdb-type">${typeLabel}</span>
+                            <div class="tmdb-title">${esc(item.title)}</div>
+                            <div class="tmdb-year">${year}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            container.innerHTML = html;
         }
 
         // ========== 搜索功能 ==========
