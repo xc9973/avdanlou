@@ -335,6 +335,8 @@
 
             // 如果有预填内容，自动搜索
             if (currentTitle) {
+                // 先设置加载状态，避免空白闪烁
+                document.getElementById('tmdbLoading').style.display = 'flex';
                 searchTMDB();
             } else {
                 searchInput.focus();
@@ -420,8 +422,18 @@
                 return;
             }
 
+            // 过滤只显示电影和电视剧
+            const filteredResults = results.filter(item =>
+                item.media_type === 'movie' || item.media_type === 'tv'
+            );
+
+            if (filteredResults.length === 0) {
+                container.innerHTML = '<div class="tmdb-no-results">未找到匹配的电影或剧集</div>';
+                return;
+            }
+
             let html = '<div class="tmdb-results-grid">';
-            for (const item of results) {
+            for (const item of filteredResults) {
                 const posterUrl = item.poster_url
                     ? item.poster_url
                     : 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="300" viewBox="0 0 200 300"><rect fill="%232a2a4a" width="200" height="300"/><text fill="%23666" x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="24">🎬</text></svg>';
