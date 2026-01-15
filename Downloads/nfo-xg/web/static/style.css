@@ -244,6 +244,20 @@ textarea {
     .file-browser {
         max-height: 40vh;
     }
+
+    .modal-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .tmdb-results-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 10px;
+    }
+
+    .tmdb-title {
+        font-size: 12px;
+    }
 }
 
 
