@@ -36,14 +36,22 @@ from nfo_editor.batch import (
 )
 from nfo_editor.batch.processor import BatchProcessor
 
+from nfo_editor.services.tmdb_client import TMDBClient
+from nfo_editor.services.tmdb_mapper import TMDBMapper
+
 app = FastAPI(title="NFO Editor", version="1.0.0")
 
 # 密码认证 (从环境变量读取，默认无密码)
 NFO_PASSWORD = os.environ.get("NFO_PASSWORD", "")
+TMDB_API_KEY = os.environ.get("TMDB_API_KEY")
 security = HTTPBasic()
 
 # 模板管理器
 template_mgr = TemplateManager(Path(__file__).parent / "templates.json")
+
+# TMDB 客户端和映射器
+tmdb_client = TMDBClient(api_key=TMDB_API_KEY)
+tmdb_mapper = TMDBMapper(tmdb_client=tmdb_client)
 
 
 def check_auth(credentials: HTTPBasicCredentials = Depends(security)):
@@ -133,6 +141,19 @@ class SearchResultItem(BaseModel):
     match_type: str      # 匹配类型: "filename" | "title" | "originaltitle" | "actor" | "plot"
     match_field: str     # 匹配的具体字段值
     title: str = ""      # NFO 标题（如果有）
+
+
+# ========== TMDB 模型 ==========
+
+class TmdbSearchRequest(BaseModel):
+    """TMDB 搜索请求模型"""
+    query: str
+    page: int = 1
+
+
+class TmdbConfigRequest(BaseModel):
+    """TMDB 配置请求模型"""
+    api_key: str
 
 
 # ========== 搜索核心逻辑 ==========
@@ -638,6 +659,92 @@ async def batch_status(
         failed=task.failed_count,
         errors=task.errors[-10:]  # 返回最近10条错误
     )
+
+
+# ========== TMDB API ==========
+
+@app.get("/api/tmdb/search")
+async def tmdb_search(query: str, page: int = 1, auth: bool = Depends(check_auth)):
+    """搜索 TMDB 电影和电视剧"""
+    try:
+        raw_data = tmdb_client.search_multi(query, page)
+
+        # Transform results to match frontend expectations
+        transformed_results = []
+        for item in raw_data.get("results", []):
+            # Extract year from date
+            date_str = item.get("release_date") or item.get("first_air_date", "")
+            year = date_str.split("-")[0] if date_str else ""
+
+            # Get poster URL
+            poster_url = tmdb_client.get_image_url(item.get("poster_path"))
+
+            # Get title (handle both movie and TV)
+            title = item.get("title") or item.get("name", "")
+
+            transformed_results.append({
+                "id": item["id"],
+                "media_type": item["media_type"],
+                "title": title,
+                "year": year,
+                "poster_url": poster_url
+            })
+
+        return {"results": transformed_results}
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/tmdb/movie/{tmdb_id}")
+async def tmdb_get_movie(tmdb_id: int, auth: bool = Depends(check_auth)):
+    """获取 TMDB 电影详情"""
+    try:
+        data = tmdb_client.get_movie_details(tmdb_id)
+        nfo_data = tmdb_mapper.map_movie(data)
+        return asdict(nfo_data)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/tmdb/tv/{tmdb_id}")
+async def tmdb_get_tv(tmdb_id: int, auth: bool = Depends(check_auth)):
+    """获取 TMDB 电视剧详情"""
+    try:
+        data = tmdb_client.get_tv_details(tmdb_id)
+        nfo_data = tmdb_mapper.map_tv_show(data)
+        return asdict(nfo_data)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/tmdb/tv/{tmdb_id}/season/{season}/episode/{episode}")
+async def tmdb_get_episode(
+    tmdb_id: int, season: int, episode: int, auth: bool = Depends(check_auth)
+):
+    """获取 TMDB 单集详情"""
+    try:
+        data = tmdb_client.get_tv_episode_details(tmdb_id, season, episode)
+        nfo_data = tmdb_mapper.map_episode(data)
+        return asdict(nfo_data)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/tmdb/config")
+async def tmdb_config(req: TmdbConfigRequest, auth: bool = Depends(check_auth)):
+    """配置 TMDB API Key"""
+    # 这里简单地更新当前实例的 API Key
+    # 在实际生产环境中，应该将 API Key 持久化存储（例如写入配置文件或数据库）
+    tmdb_client.api_key = req.api_key
+    return {"success": True, "message": "TMDB API Key 已更新"}
 
 
 if __name__ == "__main__":
