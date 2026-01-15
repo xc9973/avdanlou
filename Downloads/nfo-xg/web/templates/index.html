@@ -342,6 +342,12 @@
             document.getElementById('tmdbModal').classList.remove('active');
         }
 
+        function handleModalClick(event) {
+            if (event.target.id === 'tmdbModal') {
+                closeTMDBModal();
+            }
+        }
+
         async function searchTMDB() {
             const query = document.getElementById('tmdbSearchInput').value.trim();
             if (!query) {
@@ -701,7 +707,7 @@
     </script>
 
     <!-- TMDB 搜索模态框 -->
-    <div id="tmdbModal" class="modal">
+    <div id="tmdbModal" class="modal" onclick="handleModalClick(event)">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>🎬 搜索 TMDB</h3>
