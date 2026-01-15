@@ -190,15 +190,17 @@ class BatchProcessor:
         elif field == "genre":
             if mode == "overwrite":
                 data.genres = [value]
-            else:  # append
-                if value not in data.genres:
-                    data.genres.append(value)
+            elif mode == "append":
+                data.genres.append(value)
+            else:
+                raise ValueError(f"Invalid mode '{mode}' for field '{field}'")
         elif field == "director":
             if mode == "overwrite":
                 data.directors = [value]
-            else:  # append
-                if value not in data.directors:
-                    data.directors.append(value)
+            elif mode == "append":
+                data.directors.append(value)
+            else:
+                raise ValueError(f"Invalid mode '{mode}' for field '{field}'")
 
     def _apply_file(self, file_info: Dict[str, Any], field: str, value: str,
                     mode: str, task: BatchTask) -> bool:

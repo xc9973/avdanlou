@@ -251,3 +251,58 @@ class TestFileCountLimit:
 
             assert response.status_code == 413
             assert "Too many files" in response.json()["detail"]
+
+
+class TestAppendModePreviewApplyConsistency:
+    """Tests for append mode consistency between preview and apply."""
+
+    def test_append_mode_preview_apply_consistency(self, tmp_path):
+        """Preview and apply should have same behavior for append mode."""
+        from nfo_editor.batch.processor import BatchProcessor
+        from nfo_editor.batch import TaskManager, TaskStatus, BatchTask
+        from nfo_editor.utils.xml_parser import XmlParser
+        from datetime import datetime
+
+        # Create NFO with existing genre
+        nfo_path = tmp_path / "movie.nfo"
+        nfo_path.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?><movie><title>Test</title><genre>Action</genre></movie>',
+            encoding="utf-8"
+        )
+
+        processor = BatchProcessor(XmlParser())
+
+        # Preview append mode
+        preview_result = processor.preview(str(tmp_path), "genre", "Action", "append")
+
+        # Get the previewed new_value
+        preview_new_value = preview_result[0]["new_value"]
+
+        # Apply with same parameters
+        manager = TaskManager()
+        task = BatchTask(
+            task_id="append-test",
+            status=TaskStatus.PENDING,
+            total_files=1,
+            processed_files=0,
+            success_count=0,
+            failed_count=0,
+            errors=[],
+            created_at=datetime.now(),
+            field="genre",
+            value="Action",
+            mode="append",
+            directory=str(tmp_path),
+            preview_files=preview_result
+        )
+        manager.add(task)
+
+        processor.apply("append-test", preview_result, "genre", "Action", "append")
+
+        # Read result
+        data = processor.parser.parse(str(nfo_path))
+
+        # The preview showed what it would do, apply should match
+        # Preview and apply are now consistent: both allow appending duplicate values
+        # This test verifies that what preview shows is exactly what apply does
+        assert ", ".join(data.genres) == preview_new_value
