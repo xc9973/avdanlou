@@ -60,6 +60,7 @@ class TestBatchTask:
         assert task.value == "Disney"
         assert task.mode == "overwrite"
         assert task.directory == "/movies"
+        assert task.preview_files == []  # New field with default
 
     def test_progress_calculation(self):
         """Test progress property calculation."""
@@ -361,3 +362,192 @@ class TestModelSerialization:
         assert request.field == "genre"
         assert request.value == "Action"
         assert request.mode == "append"
+
+
+class TestBatchValidation:
+    """Test validation logic for BatchPreviewRequest."""
+
+    def test_valid_field_studio(self):
+        """Test that 'studio' is a valid field."""
+        request = BatchPreviewRequest(
+            directory="/movies",
+            field="studio",
+            value="Disney"
+        )
+        assert request.field == "studio"
+
+    def test_valid_field_genre(self):
+        """Test that 'genre' is a valid field."""
+        request = BatchPreviewRequest(
+            directory="/movies",
+            field="genre",
+            value="Action"
+        )
+        assert request.field == "genre"
+
+    def test_valid_field_director(self):
+        """Test that 'director' is a valid field."""
+        request = BatchPreviewRequest(
+            directory="/movies",
+            field="director",
+            value="Nolan"
+        )
+        assert request.field == "director"
+
+    def test_invalid_field_raises_error(self):
+        """Test that invalid field raises ValidationError."""
+        with pytest.raises(ValueError, match="field must be"):
+            BatchPreviewRequest(
+                directory="/movies",
+                field="invalid_field",
+                value="test"
+            )
+
+    def test_valid_mode_overwrite(self):
+        """Test that 'overwrite' is a valid mode."""
+        request = BatchPreviewRequest(
+            directory="/movies",
+            field="studio",
+            value="Disney",
+            mode="overwrite"
+        )
+        assert request.mode == "overwrite"
+
+    def test_valid_mode_append(self):
+        """Test that 'append' is a valid mode."""
+        request = BatchPreviewRequest(
+            directory="/movies",
+            field="genre",
+            value="Action",
+            mode="append"
+        )
+        assert request.mode == "append"
+
+    def test_invalid_mode_raises_error(self):
+        """Test that invalid mode raises ValidationError."""
+        with pytest.raises(ValueError, match="mode must be"):
+            BatchPreviewRequest(
+                directory="/movies",
+                field="studio",
+                value="Disney",
+                mode="invalid_mode"
+            )
+
+    def test_field_and_mode_validation_combined(self):
+        """Test both field and mode validation work together."""
+        # Valid both
+        request = BatchPreviewRequest(
+            directory="/movies",
+            field="genre",
+            value="Action",
+            mode="append"
+        )
+        assert request.field == "genre"
+        assert request.mode == "append"
+
+        # Invalid field
+        with pytest.raises(ValueError, match="field must be"):
+            BatchPreviewRequest(
+                directory="/movies",
+                field="bad_field",
+                value="test",
+                mode="overwrite"
+            )
+
+        # Invalid mode
+        with pytest.raises(ValueError, match="mode must be"):
+            BatchPreviewRequest(
+                directory="/movies",
+                field="studio",
+                value="Disney",
+                mode="bad_mode"
+            )
+
+
+class TestBatchTaskPreviewFiles:
+    """Test preview_files field in BatchTask."""
+
+    def test_batch_task_with_preview_files_default(self):
+        """Test that preview_files defaults to empty list."""
+        task = BatchTask(
+            task_id="test-task-preview",
+            status=TaskStatus.PENDING,
+            total_files=10,
+            processed_files=0,
+            success_count=0,
+            failed_count=0,
+            errors=[],
+            created_at=datetime.now(),
+            field="studio",
+            value="Disney",
+            mode="overwrite",
+            directory="/movies"
+        )
+
+        assert task.preview_files == []
+
+    def test_batch_task_with_preview_files(self):
+        """Test creating BatchTask with preview_files."""
+        preview_data = [
+            {"path": "/movies/movie1.nfo", "title": "Movie 1"},
+            {"path": "/movies/movie2.nfo", "title": "Movie 2"}
+        ]
+
+        task = BatchTask(
+            task_id="test-task-preview-2",
+            status=TaskStatus.PENDING,
+            total_files=10,
+            processed_files=0,
+            success_count=0,
+            failed_count=0,
+            errors=[],
+            created_at=datetime.now(),
+            field="studio",
+            value="Disney",
+            mode="overwrite",
+            directory="/movies",
+            preview_files=preview_data
+        )
+
+        assert len(task.preview_files) == 2
+        assert task.preview_files[0]["title"] == "Movie 1"
+        assert task.preview_files[1]["path"] == "/movies/movie2.nfo"
+
+    def test_batch_task_preview_files_mutable_default(self):
+        """Test that preview_files default is not shared between instances."""
+        task1 = BatchTask(
+            task_id="task-1",
+            status=TaskStatus.PENDING,
+            total_files=5,
+            processed_files=0,
+            success_count=0,
+            failed_count=0,
+            errors=[],
+            created_at=datetime.now(),
+            field="genre",
+            value="Action",
+            mode="append",
+            directory="/movies"
+        )
+
+        task2 = BatchTask(
+            task_id="task-2",
+            status=TaskStatus.PENDING,
+            total_files=5,
+            processed_files=0,
+            success_count=0,
+            failed_count=0,
+            errors=[],
+            created_at=datetime.now(),
+            field="studio",
+            value="Disney",
+            mode="overwrite",
+            directory="/movies"
+        )
+
+        # Modify task1's preview_files
+        task1.preview_files.append({"path": "/test.nfo"})
+
+        # task2 should still have empty list
+        assert task2.preview_files == []
+        assert len(task1.preview_files) == 1

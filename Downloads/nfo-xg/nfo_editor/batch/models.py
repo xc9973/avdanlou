@@ -1,10 +1,10 @@
 """Batch editing data models."""
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class TaskStatus(Enum):
@@ -30,6 +30,7 @@ class BatchTask:
     value: str
     mode: str
     directory: str
+    preview_files: List[dict] = field(default_factory=list)
 
     @property
     def progress(self) -> float:
@@ -42,9 +43,25 @@ class BatchTask:
 class BatchPreviewRequest(BaseModel):
     """Batch preview request model."""
     directory: str
-    field: str
+    field: str  # Field to modify: 'studio', 'genre', or 'director'
     value: str
-    mode: str = "overwrite"
+    mode: str = "overwrite"  # Operation mode: 'overwrite' or 'append'
+
+    @field_validator('field')
+    @classmethod
+    def validate_field(cls, v: str) -> str:
+        """Validate field is one of: studio, genre, director."""
+        if v not in ('studio', 'genre', 'director'):
+            raise ValueError("field must be 'studio', 'genre', or 'director'")
+        return v
+
+    @field_validator('mode')
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        """Validate mode is either 'overwrite' or 'append'."""
+        if v not in ('overwrite', 'append'):
+            raise ValueError("mode must be 'overwrite' or 'append'")
+        return v
 
 
 class BatchApplyRequest(BaseModel):
