@@ -310,7 +310,25 @@
         // ========== TMDB 搜索功能 ==========
 
         function openTMDBSearch() {
-            document.getElementById('tmdbModal').classList.add('active');
+            const modal = document.getElementById('tmdbModal');
+            const searchInput = document.getElementById('tmdbSearchInput');
+
+            // 预填当前标题作为搜索词
+            const currentTitle = document.getElementById('title')?.value || '';
+            searchInput.value = currentTitle;
+
+            // 清空之前的结果
+            document.getElementById('tmdbResults').innerHTML = '';
+            document.getElementById('tmdbError').style.display = 'none';
+
+            modal.classList.add('active');
+
+            // 如果有预填内容，自动搜索
+            if (currentTitle) {
+                searchTMDB();
+            } else {
+                searchInput.focus();
+            }
         }
 
         function closeTMDBModal() {
@@ -383,9 +401,63 @@
             container.innerHTML = html;
         }
 
-        // 桩函数：完整实现在 Task 5
         async function selectTMDBResult(tmdbId, mediaType) {
-            showToast('详情获取将在 Task 5 实现', 'info');
+            const loading = document.getElementById('tmdbLoading');
+            const errorDiv = document.getElementById('tmdbError');
+
+            loading.style.display = 'flex';
+            errorDiv.style.display = 'none';
+
+            try {
+                let endpoint;
+                if (mediaType === 'movie') {
+                    endpoint = `/api/tmdb/movie/${tmdbId}`;
+                } else {
+                    endpoint = `/api/tmdb/tv/${tmdbId}`;
+                }
+
+                const res = await fetch(endpoint);
+                const nfoDataResult = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(nfoDataResult.detail || '获取详情失败');
+                }
+
+                // 填充表单
+                applyTMDBData(nfoDataResult);
+
+                // 关闭模态框
+                closeTMDBModal();
+                showToast('已从 TMDB 获取数据', 'success');
+            } catch (e) {
+                errorDiv.textContent = e.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function applyTMDBData(data) {
+            // 更新 nfoData 对象
+            nfoData.nfo_type = data.nfo_type || nfoData.nfo_type;
+            nfoData.title = data.title || '';
+            nfoData.originaltitle = data.originaltitle || '';
+            nfoData.year = data.year || '';
+            nfoData.plot = data.plot || '';
+            nfoData.runtime = data.runtime || '';
+            nfoData.rating = data.rating || '';
+            nfoData.genres = data.genres || [];
+            nfoData.directors = data.directors || [];
+            nfoData.actors = data.actors || [];
+            nfoData.studio = data.studio || '';
+            nfoData.poster = data.poster || '';
+            nfoData.fanart = data.fanart || '';
+            nfoData.season = data.season || '';
+            nfoData.episode = data.episode || '';
+            nfoData.aired = data.aired || '';
+
+            // 重新渲染表单
+            renderEditor();
         }
 
         // ========== 搜索功能 ==========
