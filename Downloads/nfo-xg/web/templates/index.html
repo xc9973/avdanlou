@@ -315,7 +315,7 @@
         });
 
         // ========== TMDB 搜索功能 ==========
-
+        // 打开 TMDB 搜索模态框，预填当前标题并自动搜索
         function openTMDBSearch() {
             const modal = document.getElementById('tmdbModal');
             const searchInput = document.getElementById('tmdbSearchInput');
@@ -338,16 +338,19 @@
             }
         }
 
+        // 关闭 TMDB 搜索模态框
         function closeTMDBModal() {
             document.getElementById('tmdbModal').classList.remove('active');
         }
 
+        // 处理模态框点击事件（背景点击关闭）
         function handleModalClick(event) {
             if (event.target.id === 'tmdbModal') {
                 closeTMDBModal();
             }
         }
 
+        // 执行 TMDB 搜索请求
         async function searchTMDB() {
             const query = document.getElementById('tmdbSearchInput').value.trim();
             if (!query) {
@@ -381,6 +384,7 @@
             }
         }
 
+        // 渲染 TMDB 搜索结果卡片
         function renderTMDBResults(results) {
             const container = document.getElementById('tmdbResults');
 
@@ -414,6 +418,7 @@
             container.innerHTML = html;
         }
 
+        // 选择 TMDB 结果并获取详情
         async function selectTMDBResult(tmdbId, mediaType) {
             const loading = document.getElementById('tmdbLoading');
             const errorDiv = document.getElementById('tmdbError');
@@ -450,6 +455,7 @@
             }
         }
 
+        // 将 TMDB 数据应用到 NFO 表单
         function applyTMDBData(data) {
             if (!nfoData) {
                 showToast('请先加载或创建 NFO 文件', 'error');
