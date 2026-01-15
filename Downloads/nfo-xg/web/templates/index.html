@@ -353,8 +353,15 @@
         // 执行 TMDB 搜索请求
         async function searchTMDB() {
             const query = document.getElementById('tmdbSearchInput').value.trim();
+
             if (!query) {
                 showToast('请输入搜索关键词', 'error');
+                return;
+            }
+
+            // 验证查询长度
+            if (query.length > 200) {
+                showToast('搜索关键词过长（最多200字符）', 'error');
                 return;
             }
 
