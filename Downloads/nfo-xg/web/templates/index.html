@@ -113,7 +113,10 @@
                     </div>
                     <div class="form-group">
                         <label>标题</label>
-                        <input type="text" id="title" value="${esc(d.title)}">
+                        <div class="input-with-action">
+                            <input type="text" id="title" value="${esc(d.title)}">
+                            <button class="btn btn-primary btn-icon" onclick="openTMDBSearch()" title="从 TMDB 搜索">🔍</button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>原标题</label>
@@ -303,6 +306,12 @@
         // Init
         loadDir('');
         loadTemplates();
+
+        // ========== TMDB 搜索功能 ==========
+
+        function openTMDBSearch() {
+            // 待实现
+        }
 
         // ========== 搜索功能 ==========
         let searchResults = [];

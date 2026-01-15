@@ -88,6 +88,24 @@ label {
     text-transform: uppercase;
 }
 
+/* Input with action button */
+.input-with-action {
+    display: flex;
+    gap: 5px;
+}
+
+.input-with-action input {
+    flex: 1;
+}
+
+.btn-icon {
+    padding: 10px;
+    min-width: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 input, select, textarea {
     padding: 10px;
     border: 1px solid #0f3460;
