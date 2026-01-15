@@ -11,6 +11,7 @@ from nfo_editor.utils.validation import validate_nfo_data
 
 
 MAX_WORKERS = 10
+MAX_SCAN_DEPTH = 50
 
 
 class BatchProcessor:
@@ -27,16 +28,24 @@ class BatchProcessor:
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.task_manager = TaskManager()
 
-    def _scan_nfo_files(self, directory: Path) -> List[Path]:
+    def _scan_nfo_files(self, directory: Path, depth: int = 0) -> List[Path]:
         """Scan directory for NFO files.
 
         Args:
             directory: Directory path to scan
+            depth: Current recursion depth (for limit enforcement)
 
         Returns:
             List of NFO file paths found
+
+        Raises:
+            RuntimeError: If maximum scan depth is exceeded
         """
         nfo_files = []
+
+        # Check depth limit before processing
+        if depth > MAX_SCAN_DEPTH:
+            raise RuntimeError(f"Maximum scan depth ({MAX_SCAN_DEPTH}) exceeded")
 
         try:
             for item in directory.iterdir():
@@ -47,8 +56,8 @@ class BatchProcessor:
                 if item.is_file() and item.suffix.lower() == '.nfo':
                     nfo_files.append(item)
                 elif item.is_dir():
-                    # Recursively scan subdirectories
-                    nfo_files.extend(self._scan_nfo_files(item))
+                    # Recursively scan subdirectories with incremented depth
+                    nfo_files.extend(self._scan_nfo_files(item, depth + 1))
         except PermissionError:
             # Skip directories without permission
             pass
