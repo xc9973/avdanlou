@@ -12,6 +12,7 @@ from nfo_editor.utils.validation import validate_nfo_data
 
 MAX_WORKERS = 10
 MAX_SCAN_DEPTH = 50
+MAX_FILES_PER_BATCH = 2000
 
 
 class BatchProcessor:
@@ -146,6 +147,12 @@ class BatchProcessor:
         # Scan for NFO files
         nfo_files = self._scan_nfo_files(dir_path)
 
+        # Validate file count
+        if len(nfo_files) > MAX_FILES_PER_BATCH:
+            raise RuntimeError(
+                f"Too many files ({len(nfo_files)}). Maximum allowed: {MAX_FILES_PER_BATCH}"
+            )
+
         if not nfo_files:
             return []
 
@@ -247,6 +254,12 @@ class BatchProcessor:
         task = self.task_manager.get(task_id)
         if task is None:
             raise ValueError(f"Task not found: {task_id}")
+
+        # Validate file count
+        if len(files) > MAX_FILES_PER_BATCH:
+            raise RuntimeError(
+                f"Too many files ({len(files)}). Maximum allowed: {MAX_FILES_PER_BATCH}"
+            )
 
         # Update task status
         task.status = TaskStatus.RUNNING

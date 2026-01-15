@@ -171,3 +171,83 @@ class TestScanDepthLimit:
         # Should raise RuntimeError
         with pytest.raises(RuntimeError, match="Maximum scan depth"):
             processor.preview(str(tmp_path), "studio", "TestStudio")
+
+
+class TestFileCountLimit:
+    """Tests for file count limit validation."""
+
+    def test_max_files_limit_enforced(self, tmp_path):
+        """Should raise RuntimeError when file count exceeds limit."""
+        from nfo_editor.batch.processor import BatchProcessor, MAX_FILES_PER_BATCH
+        from nfo_editor.utils.xml_parser import XmlParser
+        from unittest.mock import patch, MagicMock
+
+        processor = BatchProcessor(XmlParser())
+
+        # Mock _scan_nfo_files to return more files than allowed
+        mock_files = [MagicMock(name=f"file{i}.nfo") for i in range(MAX_FILES_PER_BATCH + 100)]
+
+        with patch.object(processor, '_scan_nfo_files', return_value=mock_files):
+            with pytest.raises(RuntimeError, match="Too many files"):
+                processor.preview(str(tmp_path), "studio", "Test")
+
+    def test_max_files_limit_enforced_in_apply(self, tmp_path):
+        """Should raise RuntimeError when file count exceeds limit in apply."""
+        import uuid
+        from datetime import datetime
+        from nfo_editor.batch.processor import BatchProcessor, MAX_FILES_PER_BATCH
+        from nfo_editor.batch.models import BatchTask, TaskStatus
+        from nfo_editor.utils.xml_parser import XmlParser
+
+        processor = BatchProcessor(XmlParser())
+
+        # Create a task
+        task = BatchTask(
+            task_id=str(uuid.uuid4()),
+            status=TaskStatus.PENDING,
+            total_files=0,
+            processed_files=0,
+            success_count=0,
+            failed_count=0,
+            errors=[],
+            created_at=datetime.now(),
+            field="studio",
+            value="TestStudio",
+            mode="overwrite",
+            directory=str(tmp_path)
+        )
+        processor.task_manager.add(task)
+
+        # Create mock files exceeding limit
+        mock_files = [{"path": f"/fake/path/file{i}.nfo", "filename": f"file{i}.nfo"}
+                      for i in range(MAX_FILES_PER_BATCH + 100)]
+
+        # Should raise RuntimeError
+        with pytest.raises(RuntimeError, match="Too many files"):
+            processor.apply(task.task_id, mock_files, "studio", "TestStudio", "overwrite")
+
+    def test_max_files_limit_api_returns_413(self, tmp_path):
+        """API should return 413 when file count exceeds limit."""
+        from nfo_editor.batch.processor import MAX_FILES_PER_BATCH
+        from nfo_editor.batch.processor import BatchProcessor
+        from nfo_editor.utils.xml_parser import XmlParser
+        from unittest.mock import patch, MagicMock
+        from web.app import batch_processor
+
+        # Mock _scan_nfo_files to return more files than allowed
+        mock_files = [MagicMock(name=f"file{i}.nfo") for i in range(MAX_FILES_PER_BATCH + 100)]
+
+        with patch.object(batch_processor, '_scan_nfo_files', return_value=mock_files):
+            response = client.post(
+                "/api/batch/preview",
+                json={
+                    "directory": str(tmp_path),
+                    "field": "studio",
+                    "value": "Disney",
+                    "mode": "overwrite"
+                },
+                auth=("test", "test")
+            )
+
+            assert response.status_code == 413
+            assert "Too many files" in response.json()["detail"]
