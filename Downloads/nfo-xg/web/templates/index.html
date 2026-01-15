@@ -426,7 +426,7 @@
                 // 填充表单
                 applyTMDBData(nfoDataResult);
 
-                // 关闭模态框
+                // 关闭模态框（仅在成功时）
                 closeTMDBModal();
                 showToast('已从 TMDB 获取数据', 'success');
             } catch (e) {
@@ -438,6 +438,11 @@
         }
 
         function applyTMDBData(data) {
+            if (!nfoData) {
+                showToast('请先加载或创建 NFO 文件', 'error');
+                return;
+            }
+
             // 更新 nfoData 对象
             nfoData.nfo_type = data.nfo_type || nfoData.nfo_type;
             nfoData.title = data.title || '';
