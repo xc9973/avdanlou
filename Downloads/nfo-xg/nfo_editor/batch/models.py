@@ -57,6 +57,11 @@ class BatchTask:
             self.failed_count += 1
             self.errors.append(f"{filename}: {error_msg}")
 
+    def increment_processed(self) -> None:
+        """Thread-safe increment of processed_files."""
+        with self._count_lock:
+            self.processed_files += 1
+
 
 class BatchPreviewRequest(BaseModel):
     """Batch preview request model."""

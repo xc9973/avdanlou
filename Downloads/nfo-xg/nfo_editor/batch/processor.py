@@ -266,7 +266,7 @@ class BatchProcessor:
                 pass
 
             # Update progress
-            task.processed_files += 1
+            task.increment_processed()
 
         # Update final status
         if task.failed_count > 0 and task.success_count == 0:
