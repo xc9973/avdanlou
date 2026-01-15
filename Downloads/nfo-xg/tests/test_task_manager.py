@@ -134,6 +134,10 @@ class TestTaskManagerAdd:
         """Test that adding a task with same ID overwrites the old one."""
         manager = TaskManager()
 
+        # Clean up first to ensure fresh state
+        for task in manager.list_all():
+            manager.delete(task.task_id)
+
         task1 = BatchTask(
             task_id="test-overwrite",
             status=TaskStatus.PENDING,
@@ -180,6 +184,10 @@ class TestTaskManagerGet:
         """Test getting an existing task."""
         manager = TaskManager()
 
+        # Clean up first to ensure fresh state
+        for task in manager.list_all():
+            manager.delete(task.task_id)
+
         task = BatchTask(
             task_id="test-get-1",
             status=TaskStatus.COMPLETED,
@@ -214,6 +222,10 @@ class TestTaskManagerGet:
         """Test that get returns a BatchTask instance."""
         manager = TaskManager()
 
+        # Clean up first to ensure fresh state
+        for task in manager.list_all():
+            manager.delete(task.task_id)
+
         task = BatchTask(
             task_id="test-type",
             status=TaskStatus.PENDING,
@@ -242,6 +254,10 @@ class TestTaskManagerDelete:
     def test_delete_existing_task(self):
         """Test deleting an existing task."""
         manager = TaskManager()
+
+        # Clean up first to ensure fresh state
+        for task in manager.list_all():
+            manager.delete(task.task_id)
 
         task = BatchTask(
             task_id="test-delete-1",
@@ -588,25 +604,36 @@ class TestTaskManagerThreadSafety:
         for task in manager.list_all():
             manager.delete(task.task_id)
 
-        def add_task(task_num):
-            task = BatchTask(
-                task_id=f"concurrent-task-{task_num}",
-                status=TaskStatus.PENDING,
-                total_files=task_num + 1,
-                processed_files=0,
-                success_count=0,
-                failed_count=0,
-                errors=[],
-                created_at=datetime.now(),
-                field="studio",
-                value=f"Studio {task_num}",
-                mode="overwrite",
-                directory="/movies"
-            )
-            manager.add(task)
+        results = {"success": 0, "error": 0}
+        lock = threading.Lock()
 
+        def add_task(task_num):
+            try:
+                task = BatchTask(
+                    task_id=f"concurrent-task-{task_num}",
+                    status=TaskStatus.PENDING,
+                    total_files=task_num + 1,
+                    processed_files=0,
+                    success_count=0,
+                    failed_count=0,
+                    errors=[],
+                    created_at=datetime.now(),
+                    field="studio",
+                    value=f"Studio {task_num}",
+                    mode="overwrite",
+                    directory="/movies"
+                )
+                manager.add(task)
+                with lock:
+                    results["success"] += 1
+            except RuntimeError:
+                # Expected when hitting max concurrent tasks limit
+                with lock:
+                    results["error"] += 1
+
+        # Try to add more than MAX_CONCURRENT_TASKS
         threads = [
-            threading.Thread(target=add_task, args=(i,)) for i in range(20)
+            threading.Thread(target=add_task, args=(i,)) for i in range(10)
         ]
 
         for thread in threads:
@@ -615,8 +642,11 @@ class TestTaskManagerThreadSafety:
         for thread in threads:
             thread.join()
 
+        # Should have some successes and some errors due to limit
+        assert results["success"] > 0
+        assert results["success"] <= manager.MAX_CONCURRENT_TASKS
         all_tasks = manager.list_all()
-        assert len(all_tasks) == 20
+        assert len(all_tasks) <= manager.MAX_CONCURRENT_TASKS
 
     def test_concurrent_get_and_delete(self):
         """Test concurrent get and delete operations."""
@@ -626,8 +656,8 @@ class TestTaskManagerThreadSafety:
         for task in manager.list_all():
             manager.delete(task.task_id)
 
-        # Add initial tasks
-        for i in range(10):
+        # Add initial tasks (within limit)
+        for i in range(5):
             task = BatchTask(
                 task_id=f"task-{i}",
                 status=TaskStatus.PENDING,
@@ -654,7 +684,7 @@ class TestTaskManagerThreadSafety:
                     results["gets"] += 1
 
         def delete_tasks():
-            for i in range(5):
+            for i in range(3):
                 manager.delete(f"task-{i}")
                 with lock:
                     results["deletes"] += 1
@@ -671,7 +701,7 @@ class TestTaskManagerThreadSafety:
             thread.join()
 
         assert results["gets"] == 50
-        assert results["deletes"] == 5
+        assert results["deletes"] == 3
 
 
 class TestTaskManagerTTL:
@@ -770,3 +800,236 @@ class TestTaskManagerTTL:
         assert manager.get("task-600s") is not None
         assert manager.get("task-1200s") is not None
         assert manager.get("task-2400s") is None
+
+
+class TestTaskManagerMaxConcurrentTasks:
+    """Test TaskManager max concurrent tasks limit."""
+
+    def test_max_concurrent_tasks_limit(self):
+        """Test that max concurrent tasks limit is enforced."""
+        manager = TaskManager()
+
+        # Clean up first
+        for task in manager.list_all():
+            manager.delete(task.task_id)
+
+        # Add exactly MAX_CONCURRENT_TASKS tasks
+        for i in range(manager.MAX_CONCURRENT_TASKS):
+            task = BatchTask(
+                task_id=f"task-{i}",
+                status=TaskStatus.PENDING,
+                total_files=10,
+                processed_files=0,
+                success_count=0,
+                failed_count=0,
+                errors=[],
+                created_at=datetime.now(),
+                field="studio",
+                value=f"Studio {i}",
+                mode="overwrite",
+                directory="/movies"
+            )
+            manager.add(task)
+
+        # Should have exactly MAX_CONCURRENT_TASKS tasks
+        assert len(manager.list_all()) == manager.MAX_CONCURRENT_TASKS
+
+        # Adding one more should raise RuntimeError
+        extra_task = BatchTask(
+            task_id="extra-task",
+            status=TaskStatus.PENDING,
+            total_files=10,
+            processed_files=0,
+            success_count=0,
+            failed_count=0,
+            errors=[],
+            created_at=datetime.now(),
+            field="studio",
+            value="Extra",
+            mode="overwrite",
+            directory="/movies"
+        )
+
+        with pytest.raises(RuntimeError, match="Maximum concurrent tasks limit"):
+            manager.add(extra_task)
+
+    def test_max_concurrent_tasks_with_expired_cleanup(self):
+        """Test that expired tasks are cleaned up before enforcing limit."""
+        manager = TaskManager()
+
+        # Clean up first
+        for task in manager.list_all():
+            manager.delete(task.task_id)
+
+        old_time = datetime.now() - timedelta(seconds=2000)
+
+        # Add MAX_CONCURRENT_TASKS old tasks
+        for i in range(manager.MAX_CONCURRENT_TASKS):
+            task = BatchTask(
+                task_id=f"old-task-{i}",
+                status=TaskStatus.COMPLETED,
+                total_files=10,
+                processed_files=10,
+                success_count=10,
+                failed_count=0,
+                errors=[],
+                created_at=old_time,
+                field="studio",
+                value=f"Old {i}",
+                mode="overwrite",
+                directory="/movies"
+            )
+            manager.add(task)
+
+        # Now add a new task - should succeed after cleanup
+        new_task = BatchTask(
+            task_id="new-task",
+            status=TaskStatus.PENDING,
+            total_files=5,
+            processed_files=0,
+            success_count=0,
+            failed_count=0,
+            errors=[],
+            created_at=datetime.now(),
+            field="studio",
+            value="New",
+            mode="overwrite",
+            directory="/movies"
+        )
+
+        # This should succeed because old tasks are cleaned up first
+        manager.add(new_task)
+
+        # Verify only the new task remains
+        all_tasks = manager.list_all()
+        assert len(all_tasks) == 1
+        assert all_tasks[0].task_id == "new-task"
+
+    def test_max_concurrent_tasks_constant(self):
+        """Test that MAX_CONCURRENT_TASKS is set to 5."""
+        manager = TaskManager()
+        assert manager.MAX_CONCURRENT_TASKS == 5
+
+
+class TestTaskManagerAutomaticCleanup:
+    """Test TaskManager automatic cleanup mechanism."""
+
+    def test_automatic_cleanup_every_100_adds(self):
+        """Test that cleanup runs every CLEANUP_INTERVAL additions."""
+        manager = TaskManager()
+
+        # Clean up first
+        for task in manager.list_all():
+            manager.delete(task.task_id)
+
+        old_time = datetime.now() - timedelta(seconds=2000)
+
+        # Add MAX_CONCURRENT_TASKS old tasks
+        for i in range(manager.MAX_CONCURRENT_TASKS):
+            task = BatchTask(
+                task_id=f"old-task-{i}",
+                status=TaskStatus.COMPLETED,
+                total_files=10,
+                processed_files=10,
+                success_count=10,
+                failed_count=0,
+                errors=[],
+                created_at=old_time,
+                field="studio",
+                value=f"Old {i}",
+                mode="overwrite",
+                directory="/movies"
+            )
+            manager.add(task)
+
+        # Should have MAX_CONCURRENT_TASKS tasks
+        assert len(manager.list_all()) == manager.MAX_CONCURRENT_TASKS
+
+        # Manually set add_count to trigger cleanup on next add
+        manager._add_count = manager.CLEANUP_INTERVAL - 1
+
+        # Add one more task - this should trigger automatic cleanup
+        new_task = BatchTask(
+            task_id="new-task",
+            status=TaskStatus.PENDING,
+            total_files=5,
+            processed_files=0,
+            success_count=0,
+            failed_count=0,
+            errors=[],
+            created_at=datetime.now(),
+            field="studio",
+            value="New",
+            mode="overwrite",
+            directory="/movies"
+        )
+        manager.add(new_task)
+
+        # After cleanup, only the new task should remain
+        all_tasks = manager.list_all()
+        assert len(all_tasks) == 1
+        assert all_tasks[0].task_id == "new-task"
+
+    def test_cleanup_interval_constant(self):
+        """Test that CLEANUP_INTERVAL is set to 100."""
+        manager = TaskManager()
+        assert manager.CLEANUP_INTERVAL == 100
+
+    def test_automatic_cleanup_respects_lock(self):
+        """Test that automatic cleanup is thread-safe."""
+        manager = TaskManager()
+
+        # Clean up first
+        for task in manager.list_all():
+            manager.delete(task.task_id)
+
+        success = True
+        errors = []
+        results = {"added": 0, "errors": 0}
+        lock = threading.Lock()
+
+        def add_many_tasks(start_id):
+            try:
+                for i in range(10):
+                    task = BatchTask(
+                        task_id=f"task-{start_id}-{i}",
+                        status=TaskStatus.PENDING,
+                        total_files=10,
+                        processed_files=0,
+                        success_count=0,
+                        failed_count=0,
+                        errors=[],
+                        created_at=datetime.now(),
+                        field="studio",
+                        value=f"Studio {i}",
+                        mode="overwrite",
+                        directory="/movies"
+                    )
+                    try:
+                        manager.add(task)
+                        with lock:
+                            results["added"] += 1
+                    except RuntimeError:
+                        # Expected when hitting max concurrent tasks limit
+                        with lock:
+                            results["errors"] += 1
+            except Exception as e:
+                nonlocal success
+                success = False
+                errors.append(str(e))
+
+        threads = [
+            threading.Thread(target=add_many_tasks, args=(0,)),
+            threading.Thread(target=add_many_tasks, args=(1,))
+        ]
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        assert success, f"Thread-safe cleanup failed: {errors}"
+        # Should have some additions and some errors due to limit
+        assert results["added"] > 0
+        assert results["added"] <= manager.MAX_CONCURRENT_TASKS
