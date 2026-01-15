@@ -315,6 +315,9 @@
         });
 
         // ========== TMDB 搜索功能 ==========
+        let searchDebounceTimer = null;
+        const SEARCH_DEBOUNCE_MS = 300;
+
         // 打开 TMDB 搜索模态框，预填当前标题并自动搜索
         function openTMDBSearch() {
             const modal = document.getElementById('tmdbModal');
@@ -352,6 +355,11 @@
 
         // 执行 TMDB 搜索请求
         async function searchTMDB() {
+            // 清除之前的防抖计时器
+            if (searchDebounceTimer) {
+                clearTimeout(searchDebounceTimer);
+            }
+
             const query = document.getElementById('tmdbSearchInput').value.trim();
 
             if (!query) {
@@ -374,21 +382,33 @@
             errorDiv.style.display = 'none';
             resultsDiv.innerHTML = '';
 
-            try {
-                const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}`);
-                const data = await res.json();
+            // 防抖：300ms 后执行搜索
+            searchDebounceTimer = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}`);
+                    const data = await res.json();
 
-                if (!res.ok) {
-                    throw new Error(data.detail || '搜索失败');
+                    if (!res.ok) {
+                        // 映射错误消息
+                        let errorMsg = '搜索失败，请稍后重试';
+                        if (res.status === 401) {
+                            errorMsg = 'TMDB API Key 未配置或无效，请联系管理员';
+                        } else if (res.status === 429) {
+                            errorMsg = '搜索过于频繁，请稍后再试';
+                        } else if (data.detail) {
+                            errorMsg = data.detail;
+                        }
+                        throw new Error(errorMsg);
+                    }
+
+                    renderTMDBResults(data.results);
+                } catch (e) {
+                    errorDiv.textContent = e.message;
+                    errorDiv.style.display = 'block';
+                } finally {
+                    loading.style.display = 'none';
                 }
-
-                renderTMDBResults(data.results);
-            } catch (e) {
-                errorDiv.textContent = e.message;
-                errorDiv.style.display = 'block';
-            } finally {
-                loading.style.display = 'none';
-            }
+            }, SEARCH_DEBOUNCE_MS);
         }
 
         // 渲染 TMDB 搜索结果卡片
@@ -445,7 +465,18 @@
                 const nfoDataResult = await res.json();
 
                 if (!res.ok) {
-                    throw new Error(nfoDataResult.detail || '获取详情失败');
+                    // 映射错误消息
+                    let errorMsg = '获取详情失败，请稍后重试';
+                    if (res.status === 401) {
+                        errorMsg = 'TMDB API Key 未配置或无效，请联系管理员';
+                    } else if (res.status === 404) {
+                        errorMsg = '未找到该内容的详细信息';
+                    } else if (res.status === 429) {
+                        errorMsg = '请求过于频繁，请稍后再试';
+                    } else if (nfoDataResult.detail) {
+                        errorMsg = nfoDataResult.detail;
+                    }
+                    throw new Error(errorMsg);
                 }
 
                 // 填充表单
