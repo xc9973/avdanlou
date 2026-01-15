@@ -7,6 +7,7 @@ from .models import (
     BatchPreviewResponse,
     BatchStatusResponse,
 )
+from .task_manager import TaskManager
 
 __all__ = [
     'TaskStatus',
@@ -15,4 +16,5 @@ __all__ = [
     'BatchApplyRequest',
     'BatchPreviewResponse',
     'BatchStatusResponse',
+    'TaskManager',
 ]
