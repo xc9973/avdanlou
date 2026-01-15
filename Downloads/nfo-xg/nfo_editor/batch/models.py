@@ -3,6 +3,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from typing import List
 from enum import Enum
+import threading
 
 from pydantic import BaseModel, field_validator
 
@@ -31,6 +32,7 @@ class BatchTask:
     mode: str
     directory: str
     preview_files: List[dict] = field(default_factory=list)
+    _count_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @property
     def progress(self) -> float:
@@ -38,6 +40,22 @@ class BatchTask:
         if self.total_files == 0:
             return 0.0
         return self.processed_files / self.total_files * 100
+
+    def increment_success(self) -> None:
+        """Thread-safe increment of success_count."""
+        with self._count_lock:
+            self.success_count += 1
+
+    def increment_failed(self, error_msg: str, filename: str = "unknown") -> None:
+        """Thread-safe increment of failed_count and error logging.
+
+        Args:
+            error_msg: The error message to log
+            filename: Name of the file that failed (for tracking)
+        """
+        with self._count_lock:
+            self.failed_count += 1
+            self.errors.append(f"{filename}: {error_msg}")
 
 
 class BatchPreviewRequest(BaseModel):
