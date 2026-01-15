@@ -310,7 +310,11 @@
         // ========== TMDB 搜索功能 ==========
 
         function openTMDBSearch() {
-            // 待实现
+            document.getElementById('tmdbModal').classList.add('active');
+        }
+
+        function closeTMDBModal() {
+            document.getElementById('tmdbModal').classList.remove('active');
         }
 
         // ========== 搜索功能 ==========
@@ -540,5 +544,27 @@
             saveAsTemplate();
         }
     </script>
+
+    <!-- TMDB 搜索模态框 -->
+    <div id="tmdbModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🎬 搜索 TMDB</h3>
+                <button class="modal-close" onclick="closeTMDBModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="tmdb-search-bar">
+                    <input type="text" id="tmdbSearchInput" placeholder="输入电影或剧集名称..."
+                        onkeypress="if(event.key==='Enter')searchTMDB()">
+                    <button class="btn btn-primary" onclick="searchTMDB()">搜索</button>
+                </div>
+                <div id="tmdbLoading" class="tmdb-loading" style="display:none">
+                    <span class="spinner"></span> 搜索中...
+                </div>
+                <div id="tmdbError" class="tmdb-error" style="display:none"></div>
+                <div id="tmdbResults" class="tmdb-results"></div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
