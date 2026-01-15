@@ -914,6 +914,126 @@ class TestTaskManagerMaxConcurrentTasks:
 class TestTaskManagerAutomaticCleanup:
     """Test TaskManager automatic cleanup mechanism."""
 
+
+class TestBatchProcessorPreview:
+    """Tests for BatchProcessor preview functionality."""
+
+    def test_preview_returns_current_and_new_values(self, tmp_path):
+        """Preview includes current_value and new_value for overwrite mode."""
+        from nfo_editor.batch.processor import BatchProcessor
+        from nfo_editor.utils.xml_parser import XmlParser
+
+        nfo_path = tmp_path / "movie.nfo"
+        nfo_path.write_text(
+            """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<movie>
+    <title>Test Movie</title>
+    <studio>Old Studio</studio>
+</movie>""",
+            encoding="utf-8"
+        )
+
+        processor = BatchProcessor(XmlParser())
+        result = processor.preview(str(tmp_path), "studio", "Disney", "overwrite")
+
+        assert len(result) == 1
+        assert result[0]["current_value"] == "Old Studio"
+        assert result[0]["new_value"] == "Disney"
+
+    def test_preview_append_mode_uses_existing_value(self, tmp_path):
+        """Append mode should concatenate existing and new values."""
+        from nfo_editor.batch.processor import BatchProcessor
+        from nfo_editor.utils.xml_parser import XmlParser
+
+        nfo_path = tmp_path / "movie.nfo"
+        nfo_path.write_text(
+            """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<movie>
+    <title>Test Movie</title>
+    <genre>Action</genre>
+</movie>""",
+            encoding="utf-8"
+        )
+
+        processor = BatchProcessor(XmlParser())
+        result = processor.preview(str(tmp_path), "genre", "Comedy", "append")
+
+        assert len(result) == 1
+        assert result[0]["current_value"] == "Action"
+        assert result[0]["new_value"] == "Action, Comedy"
+
+
+class TestBatchProcessorApply:
+    """Tests for BatchProcessor apply functionality."""
+
+    def test_apply_updates_files_and_task_counts(self, tmp_path):
+        """Apply should update file content and task counters."""
+        from datetime import datetime
+        from nfo_editor.batch import TaskManager, TaskStatus, BatchTask
+        from nfo_editor.batch.processor import BatchProcessor
+        from nfo_editor.utils.xml_parser import XmlParser
+
+        nfo_path = tmp_path / "movie.nfo"
+        nfo_path.write_text(
+            """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<movie>
+    <title>Test Movie</title>
+    <studio>Old Studio</studio>
+</movie>""",
+            encoding="utf-8"
+        )
+
+        manager = TaskManager()
+        task = BatchTask(
+            task_id="apply-task-1",
+            status=TaskStatus.PENDING,
+            total_files=0,
+            processed_files=0,
+            success_count=0,
+            failed_count=0,
+            errors=[],
+            created_at=datetime.now(),
+            field="studio",
+            value="Disney",
+            mode="overwrite",
+            directory=str(tmp_path),
+            preview_files=[{"path": str(nfo_path), "filename": "movie.nfo", "title": "Test Movie"}]
+        )
+        manager.add(task)
+
+        processor = BatchProcessor(XmlParser())
+        updated_task = processor.apply(
+            task_id="apply-task-1",
+            files=task.preview_files,
+            field="studio",
+            value="Disney",
+            mode="overwrite"
+        )
+
+        content = nfo_path.read_text(encoding="utf-8")
+        assert "<studio>Disney</studio>" in content
+        assert updated_task.processed_files == 1
+        assert updated_task.success_count == 1
+        assert updated_task.failed_count == 0
+        assert updated_task.status == TaskStatus.COMPLETED
+
+    def test_apply_invalid_task_raises(self, tmp_path):
+        """Apply should raise for unknown task id."""
+        from nfo_editor.batch.processor import BatchProcessor
+        from nfo_editor.utils.xml_parser import XmlParser
+        import pytest
+
+        processor = BatchProcessor(XmlParser())
+
+        with pytest.raises(ValueError, match="Task not found"):
+            processor.apply(
+                task_id="missing-task",
+                files=[],
+                field="studio",
+                value="Disney",
+                mode="overwrite"
+            )
+
     def test_automatic_cleanup_every_100_adds(self):
         """Test that cleanup runs every CLEANUP_INTERVAL additions."""
         manager = TaskManager()
