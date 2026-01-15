@@ -307,6 +307,13 @@
         loadDir('');
         loadTemplates();
 
+        // 键盘事件
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeTMDBModal();
+            }
+        });
+
         // ========== TMDB 搜索功能 ==========
 
         function openTMDBSearch() {
