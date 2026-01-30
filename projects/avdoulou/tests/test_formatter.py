@@ -22,6 +22,48 @@ def test_format_success_message():
     assert "1920x1080" in message
 
 
+def test_format_success_message_zero_duration():
+    """测试0时长的消息格式化"""
+    video = VideoInfo(
+        url="https://video.twimg.com/test.mp4",
+        title="Test",
+        duration=0,
+        width=1920,
+        height=1080,
+    )
+    message = format_success_message(video)
+    assert "0:00" in message
+
+
+def test_format_success_message_zero_resolution():
+    """测试0分辨率的消息格式化"""
+    video = VideoInfo(
+        url="https://video.twimg.com/test.mp4",
+        title="Test",
+        duration=60,
+        width=0,
+        height=0,
+    )
+    message = format_success_message(video)
+    assert "未知" in message
+
+
+def test_format_success_message_markdown_escape():
+    """测试Markdown特殊字符转义"""
+    video = VideoInfo(
+        url="https://video.twimg.com/test.mp4",
+        title="Test [Video] With *Special* _Characters_",
+        duration=60,
+        width=1920,
+        height=1080,
+    )
+    message = format_success_message(video)
+    # 确保特殊字符被转义
+    assert "\\[" in message
+    assert "\\*" in message
+    assert "\\_" in message
+
+
 def test_format_error_message_no_video():
     """测试无视频错误消息"""
     message = format_error_message("no_video")
@@ -41,3 +83,10 @@ def test_format_error_message_invalid_url():
     message = format_error_message("invalid_url")
 
     assert "链接" in message or "url" in message.lower()
+
+
+def test_format_error_message_unknown():
+    """测试未知错误消息"""
+    message = format_error_message("unknown_error")
+
+    assert "未知错误" in message or "unknown" in message.lower()
