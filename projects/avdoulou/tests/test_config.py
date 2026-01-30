@@ -37,3 +37,54 @@ def test_config_missing_bot_token(monkeypatch):
     from config import Config
     with pytest.raises(ValidationError):
         Config()
+
+
+def test_config_invalid_rate_limit(monkeypatch):
+    """测试 rate_limit 负数验证"""
+    monkeypatch.setenv("BOT_TOKEN", "test_token")
+    monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "-1")
+
+    from config import Config
+    with pytest.raises(ValidationError):
+        Config()
+
+
+def test_config_invalid_log_level(monkeypatch):
+    """测试无效日志级别"""
+    monkeypatch.setenv("BOT_TOKEN", "test_token")
+    monkeypatch.setenv("LOG_LEVEL", "INVALID")
+
+    from config import Config
+    with pytest.raises(ValidationError):
+        Config()
+
+
+def test_config_case_insensitive(monkeypatch):
+    """测试环境变量大小写不敏感"""
+    monkeypatch.setenv("bot_token", "test_token")  # 小写
+    monkeypatch.setenv("log_level", "debug")       # 小写
+
+    from config import Config
+    config = Config()
+    assert config.bot_token == "test_token"
+    assert config.log_level == "DEBUG"
+
+
+def test_config_rate_limit_zero(monkeypatch):
+    """测试 rate_limit 为 0 时验证"""
+    monkeypatch.setenv("BOT_TOKEN", "test_token")
+    monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "0")
+
+    from config import Config
+    with pytest.raises(ValidationError):
+        Config()
+
+
+def test_config_log_level_normalization(monkeypatch):
+    """测试日志级别自动转为大写"""
+    monkeypatch.setenv("BOT_TOKEN", "test_token")
+    monkeypatch.setenv("LOG_LEVEL", "warning")
+
+    from config import Config
+    config = Config()
+    assert config.log_level == "WARNING"
