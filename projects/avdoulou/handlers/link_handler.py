@@ -1,7 +1,12 @@
 # handlers/link_handler.py
+import asyncio
+import logging
 import yt_dlp
 from dataclasses import dataclass
 from utils.validators import is_x_video_url
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -40,12 +45,18 @@ class LinkHandler:
             "quiet": True,
             "no_warnings": True,
             "extract_flat": False,
-            "format": "best",  # 选择最佳质量
+            "format": "best[ext=mp4]/best[vcodec!=none]/best",
         }
 
         try:
+            loop = asyncio.get_event_loop()
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
+                info = await loop.run_in_executor(
+                    None,
+                    ydl.extract_info,
+                    url,
+                    False,  # download=False
+                )
 
                 if not info:
                     return None
@@ -53,10 +64,17 @@ class LinkHandler:
                 # 获取视频 URL
                 video_url = info.get("url")
                 if not video_url:
-                    # 尝试从 formats 中获取
+                    # 尝试从 formats 中获取最佳格式
                     formats = info.get("formats", [])
                     if formats:
-                        video_url = formats[-1].get("url")  # 通常最后一个是最佳质量
+                        # 选择有视频流的最佳格式
+                        best_format = None
+                        for f in formats:
+                            if f.get("vcodec") != "none":
+                                if best_format is None or f.get("height", 0) > best_format.get("height", 0):
+                                    best_format = f
+                        if best_format:
+                            video_url = best_format.get("url")
 
                 if not video_url:
                     return None
@@ -69,5 +87,5 @@ class LinkHandler:
                     "height": info.get("height", 0),
                 }
         except Exception as e:
-            print(f"Error extracting video info: {e}")
+            logger.error(f"Error extracting video info from {url}: {e}", exc_info=True)
             return None

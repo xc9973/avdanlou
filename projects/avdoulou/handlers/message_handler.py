@@ -1,4 +1,5 @@
 # handlers/message_handler.py
+import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 from handlers.link_handler import LinkHandler
@@ -8,6 +9,8 @@ from utils.formatter import format_success_message, format_error_message
 
 class MessageHandler:
     """Telegram 消息处理器"""
+
+    logger = logging.getLogger(__name__)
 
     def __init__(self):
         self.link_handler = LinkHandler()
@@ -77,4 +80,4 @@ class MessageHandler:
         except Exception as e:
             await processing_msg.delete()
             await update.message.reply_text(format_error_message("parse_failed"))
-            print(f"Error: {e}")
+            self.logger.error(f"Failed to parse video from {text[:50]}...: {e}", exc_info=True)
