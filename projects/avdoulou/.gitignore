@@ -24,6 +24,12 @@ wheels/
 .installed.cfg
 *.egg
 
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
 # Environment
 .env
 
