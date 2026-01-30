@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
+# 创建非 root 用户
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+
 # 复制依赖文件
 COPY requirements.txt .
 
@@ -14,7 +17,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码
-COPY . .
+COPY --chown=appuser:appuser . .
+
+# 切换到非 root 用户
+USER appuser
 
 # 运行 Bot
 CMD ["python", "bot.py"]
