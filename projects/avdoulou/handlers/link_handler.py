@@ -1,9 +1,9 @@
 # handlers/link_handler.py
 import asyncio
 import logging
+import os
 import yt_dlp
 from dataclasses import dataclass
-from typing import List
 from utils.validators import is_x_video_url
 
 
@@ -53,9 +53,6 @@ class LinkHandler:
 
     async def _extract_video_info(self, url: str) -> dict | None:
         """使用 yt-dlp 提取视频信息"""
-        # 如果配置了代理，重写 URL
-        target_url = self._maybe_rewrite_url(url)
-
         # 第一步：使用 extract_flat 获取推文信息（支持转推）
         ydl_opts_flat = {
             "quiet": True,
@@ -70,16 +67,13 @@ class LinkHandler:
             if cookie_file:
                 ydl_opts_flat["cookiefile"] = cookie_file
 
-            if self.config.use_proxy():
-                logger.info(f"Using proxy for URL: {target_url}")
-
         try:
             loop = asyncio.get_event_loop()
             with yt_dlp.YoutubeDL(ydl_opts_flat) as ydl:
                 info = await loop.run_in_executor(
                     None,
                     ydl.extract_info,
-                    target_url,
+                    url,
                     False,
                 )
 
@@ -121,8 +115,13 @@ class LinkHandler:
                 try:
                     import os
                     os.remove(cookie_file)
-                except:
-                    pass
+                    logger.debug(f"Cleaned up cookie file: {cookie_file}")
+                except PermissionError as e:
+                    logger.warning(f"Permission denied removing cookie file: {e}")
+                except FileNotFoundError:
+                    pass  # 文件已被删除，忽略
+                except Exception as e:
+                    logger.error(f"Failed to remove cookie file {cookie_file}: {e}")
 
 
     async def extract_x_content(self, url: str) -> dict:
@@ -137,9 +136,6 @@ class LinkHandler:
         if not is_x_video_url(url):
             return {"type": "unknown", "items": []}
 
-        # 如果配置了代理，重写 URL
-        target_url = self._maybe_rewrite_url(url)
-
         ydl_opts = {
             "quiet": True,
             "no_warnings": True,
@@ -153,9 +149,6 @@ class LinkHandler:
             if cookie_file:
                 ydl_opts["cookiefile"] = cookie_file
 
-            if self.config.use_proxy():
-                logger.info(f"Using proxy for URL: {target_url}")
-
         info = None
         try:
             loop = asyncio.get_event_loop()
@@ -163,7 +156,7 @@ class LinkHandler:
                 info = await loop.run_in_executor(
                     None,
                     ydl.extract_info,
-                    target_url,
+                    url,
                     False,  # download=False
                 )
         except Exception as e:
@@ -173,8 +166,13 @@ class LinkHandler:
             if cookie_file:
                 try:
                     os.remove(cookie_file)
-                except:
-                    pass
+                    logger.debug(f"Cleaned up cookie file: {cookie_file}")
+                except PermissionError as e:
+                    logger.warning(f"Permission denied removing cookie file: {e}")
+                except FileNotFoundError:
+                    pass  # 文件已被删除，忽略
+                except Exception as e:
+                    logger.error(f"Failed to remove cookie file {cookie_file}: {e}")
 
         if not info:
             return {"type": "unknown", "items": []}
@@ -209,12 +207,4 @@ class LinkHandler:
                 return {"type": "photos", "items": photos}
 
         return {"type": "unknown", "items": []}
-
-    def _maybe_rewrite_url(self, url: str) -> str:
-        """如果配置了代理，重写 URL 为代理格式"""
-        if self.config and self.config.use_proxy():
-            proxy_url = self.config.twitter_proxy_url.rstrip('/')
-            # 格式: https://worker.workers.dev/https://original-url
-            return f"{proxy_url}/{url}"
-        return url
 

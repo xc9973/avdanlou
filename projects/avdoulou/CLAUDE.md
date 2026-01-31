@@ -7,6 +7,19 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #5428 | 3:18 PM | 🔵 | Twitter proxy URL configured in .env file | ~186 |
+| #5499 | 4:08 PM | 🔄 | Removed TWITTER_PROXY_URL configuration from Config class | ~271 |
+| #5498 | " | 🔵 | Config module manages environment variables and cookie/proxy settings | ~365 |
+| #5484 | 3:55 PM | 🔵 | Dockerfile configuration reviewed for containerized deployment | ~269 |
+| #5483 | " | 🔵 | Docker Compose configuration reviewed for .env integration | ~221 |
+| #5432 | 3:18 PM | ✅ | Updated .env.example with TWITTER_PROXY_URL configuration | ~268 |
+| #5428 | " | 🔵 | Twitter proxy URL configured in .env file | ~186 |
 | #5426 | " | 🔵 | TWITTER_PROXY_URL configuration not found in .env file | ~204 |
+| #5399 | 2:51 PM | 🔵 | Existing Twitter/X API Proxy implementation discovered | ~386 |
+| #5391 | 12:57 PM | 🟣 | Created AppleScript helper for automatic X/Twitter cookie extraction on macOS | ~265 |
+| #5390 | " | 🟣 | Created AppleScript helper for one-click cookie extraction from Chrome | ~231 |
+| #5389 | 12:56 PM | 🟣 | Created AppleScript for extracting cookies from Chrome browser | ~203 |
+| #5385 | 12:45 PM | 🟣 | Created one-click cookie extraction script | ~131 |
+| #5383 | 12:36 PM | 🟣 | Created cookie extraction helper tool | ~183 |
+| #5382 | " | 🟣 | Created cookie extraction helper tool | ~215 |
+| #5374 | 12:27 PM | 🟣 | Implemented X/Twitter cookie authentication script | ~224 |
 </claude-mem-context>
