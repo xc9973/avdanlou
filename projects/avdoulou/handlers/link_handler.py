@@ -1,11 +1,9 @@
 # handlers/link_handler.py
 import asyncio
 import logging
-import os
-import tempfile
 import yt_dlp
 from dataclasses import dataclass
-from pathlib import Path
+from typing import List
 from utils.validators import is_x_video_url
 
 
@@ -22,8 +20,19 @@ class VideoInfo:
     height: int
 
 
+@dataclass
+class PhotoInfo:
+    """图片信息"""
+    url: str
+    width: int
+    height: int
+
+
 class LinkHandler:
     """链接处理器"""
+
+    def __init__(self, config=None):
+        self.config = config
 
     async def parse_x_video(self, url: str) -> VideoInfo | None:
         """解析 X 视频链接，返回视频信息"""
@@ -44,40 +53,54 @@ class LinkHandler:
 
     async def _extract_video_info(self, url: str) -> dict | None:
         """使用 yt-dlp 提取视频信息"""
-        ydl_opts = {
+        # 如果配置了代理，重写 URL
+        target_url = self._maybe_rewrite_url(url)
+
+        # 第一步：使用 extract_flat 获取推文信息（支持转推）
+        ydl_opts_flat = {
             "quiet": True,
             "no_warnings": True,
-            "extract_flat": False,
-            "format": "best[ext=mp4]/best[vcodec!=none]/best",
+            "extract_flat": True,  # 支持转推，不解析格式
         }
+
+        # 添加 Cookie 支持（用于 18+ 内容）
+        cookie_file = None
+        if self.config:
+            cookie_file = self.config.get_twitter_cookie_file()
+            if cookie_file:
+                ydl_opts_flat["cookiefile"] = cookie_file
+
+            if self.config.use_proxy():
+                logger.info(f"Using proxy for URL: {target_url}")
 
         try:
             loop = asyncio.get_event_loop()
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(ydl_opts_flat) as ydl:
                 info = await loop.run_in_executor(
                     None,
                     ydl.extract_info,
-                    url,
-                    False,  # download=False
+                    target_url,
+                    False,
                 )
 
                 if not info:
                     return None
 
-                # 获取视频 URL
+                # 第二步：如果找到了视频，获取最佳格式的 URL
+                # 如果 info 中有 url，直接使用；否则从 formats 中提取
                 video_url = info.get("url")
                 if not video_url:
-                    # 尝试从 formats 中获取最佳格式
                     formats = info.get("formats", [])
-                    if formats:
-                        # 选择有视频流的最佳格式
-                        best_format = None
-                        for f in formats:
-                            if f.get("vcodec") != "none":
-                                if best_format is None or f.get("height", 0) > best_format.get("height", 0):
-                                    best_format = f
-                        if best_format:
-                            video_url = best_format.get("url")
+                    # 选择有视频流的最佳格式
+                    best_format = None
+                    for f in formats:
+                        vcodec = f.get("vcodec", "none")
+                        if vcodec and vcodec != "none":
+                            height = f.get("height", 0)
+                            if best_format is None or height > best_format.get("height", 0):
+                                best_format = f
+                    if best_format:
+                        video_url = best_format.get("url")
 
                 if not video_url:
                     return None
@@ -92,76 +115,106 @@ class LinkHandler:
         except Exception as e:
             logger.error(f"Error extracting video info from {url}: {e}", exc_info=True)
             return None
+        finally:
+            # 清理临时 cookie 文件
+            if cookie_file:
+                try:
+                    import os
+                    os.remove(cookie_file)
+                except:
+                    pass
 
-    async def download_x_video(self, url: str) -> str | None:
-        """下载 X 视频，返回本地文件路径
+
+    async def extract_x_content(self, url: str) -> dict:
+        """提取 X 推文内容（视频或图片）
 
         Args:
             url: X/Twitter 推文链接
 
         Returns:
-            下载的视频文件路径，失败返回 None
+            包含内容的字典: {"type": "video"|"photos", "items": [...]}
         """
         if not is_x_video_url(url):
-            return None
+            return {"type": "unknown", "items": []}
 
-        # 创建临时目录
-        temp_dir = tempfile.gettempdir()
-        temp_file = os.path.join(temp_dir, "x_video_$(id)s.%(ext)s")
+        # 如果配置了代理，重写 URL
+        target_url = self._maybe_rewrite_url(url)
 
         ydl_opts = {
             "quiet": True,
             "no_warnings": True,
-            "outtmpl": temp_file,
-            "format": "best[ext=mp4]/best[vcodec!=none]/best",
+            "extract_flat": True,  # 支持转推
         }
 
+        # 添加 Cookie 支持
+        cookie_file = None
+        if self.config:
+            cookie_file = self.config.get_twitter_cookie_file()
+            if cookie_file:
+                ydl_opts["cookiefile"] = cookie_file
+
+            if self.config.use_proxy():
+                logger.info(f"Using proxy for URL: {target_url}")
+
+        info = None
         try:
             loop = asyncio.get_event_loop()
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = await loop.run_in_executor(
                     None,
                     ydl.extract_info,
-                    url,
-                    True,  # download=True
+                    target_url,
+                    False,  # download=False
                 )
-
-                if not info:
-                    return None
-
-                # 获取下载的文件路径
-                filename = ydl.prepare_filename(info)
-                if os.path.exists(filename):
-                    logger.info(f"Video downloaded to {filename}")
-                    return filename
-
-                # yt-dlp 可能会添加 .mp4 等扩展名
-                possible_files = [
-                    filename,
-                    filename + ".mp4",
-                    filename + ".webm",
-                ]
-                for f in possible_files:
-                    if os.path.exists(f):
-                        logger.info(f"Video downloaded to {f}")
-                        return f
-
-                return None
-
         except Exception as e:
-            logger.error(f"Error downloading video from {url}: {e}", exc_info=True)
-            return None
+            logger.error(f"Error extracting content from {url}: {e}")
+        finally:
+            # 清理临时 cookie 文件
+            if cookie_file:
+                try:
+                    os.remove(cookie_file)
+                except:
+                    pass
 
-    @staticmethod
-    def cleanup_video_file(file_path: str) -> None:
-        """清理下载的视频文件
+        if not info:
+            return {"type": "unknown", "items": []}
 
-        Args:
-            file_path: 视频文件路径
-        """
-        try:
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f"Cleaned up video file: {file_path}")
-        except Exception as e:
-            logger.error(f"Error cleaning up video file {file_path}: {e}")
+        # 优先检查是否有视频（通过 formats）
+        formats = info.get("formats", [])
+        has_video = any(f.get("vcodec") != "none" for f in formats if f.get("vcodec"))
+        if has_video or info.get("duration"):
+            return {"type": "video", "items": [info]}
+
+        # 检查是否有图片
+        thumbnails = info.get("thumbnails")
+        if thumbnails:
+            # 提取高质量图片
+            photos = []
+            seen_urls = set()
+            for thumb in thumbnails:
+                img_url = thumb.get("url")
+                if img_url and "?format=" not in img_url and img_url not in seen_urls:
+                    # 过滤掉小尺寸预览图，只保留原图
+                    if "orig" in img_url or "large" in img_url or "medium" in img_url:
+                        seen_urls.add(img_url)
+                        photos.append(PhotoInfo(
+                            url=img_url,
+                            width=thumb.get("width", 0),
+                            height=thumb.get("height", 0)
+                        ))
+                    if len(photos) >= 4:  # 最多4张图
+                        break
+
+            if photos:
+                return {"type": "photos", "items": photos}
+
+        return {"type": "unknown", "items": []}
+
+    def _maybe_rewrite_url(self, url: str) -> str:
+        """如果配置了代理，重写 URL 为代理格式"""
+        if self.config and self.config.use_proxy():
+            proxy_url = self.config.twitter_proxy_url.rstrip('/')
+            # 格式: https://worker.workers.dev/https://original-url
+            return f"{proxy_url}/{url}"
+        return url
+

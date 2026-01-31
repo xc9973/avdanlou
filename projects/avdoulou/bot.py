@@ -31,6 +31,14 @@ def main():
         print("错误: 请设置有效的 BOT_TOKEN 环境变量")
         sys.exit(1)
 
+    # 验证白名单
+    allowed_ids = config.get_allowed_user_ids()
+    if not allowed_ids:
+        print("错误: 请设置 ALLOWED_USER_IDS 环境变量")
+        print("获取方式: 发送消息给 @userinfobot 或 @getmyid_bot")
+        sys.exit(1)
+    print(f"白名单用户: {allowed_ids}")
+
     # 配置日志
     setup_logging(config.log_level)
 
@@ -41,8 +49,8 @@ def main():
         print(f"错误: 无法创建 Telegram 应用 - {e}")
         sys.exit(1)
 
-    # 创建消息处理器
-    msg_handler = MsgHandler()
+    # 创建消息处理器（传入 config）
+    msg_handler = MsgHandler(config)
 
     # 注册处理器
     application.add_handler(CommandHandler("start", msg_handler.start_command))

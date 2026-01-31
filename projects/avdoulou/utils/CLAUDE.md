@@ -13,6 +13,14 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #5306 | 10:46 AM | 🟣 | Added tweet text extraction to video parsing | ~201 |
+| #5302 | 10:44 AM | 🔵 | Identified forwarded tweet access issue | ~165 |
+| #5293 | 10:06 AM | 🔴 | Fixed float-to-int conversion error in duration formatting | ~170 |
+| #5185 | 9:05 AM | ✅ | Large repository cleanup removing Downloads directory projects | ~198 |
+| #5171 | 8:58 AM | 🔴 | Fixed type conversion in CLI video duration formatting | ~189 |
+| #5167 | 8:54 AM | 🟣 | Added CLI tool for X video link parsing | ~118 |
+| #5162 | 8:51 AM | 🔴 | Fixed missing dependencies causing test failures | ~190 |
+| #5133 | 12:37 AM | 🟣 | Comprehensive test suite passing with 23 tests | ~263 |
 | #5094 | 12:30 AM | 🟣 | Message formatter enhanced with MarkdownV2 escaping and message length protection | ~276 |
 | #5049 | 12:23 AM | 🟣 | Message formatter implemented with MarkdownV2 escaping and length protection | ~302 |
 | #5044 | 12:21 AM | 🔄 | Enhanced formatter with MarkdownV2 escaping and message length protection | ~251 |
